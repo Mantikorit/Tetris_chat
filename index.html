@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Tetris — чат играет в тетрис</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <h1 class="logo">CHAT<span>▮</span>TETRIS</h1>
+    <div class="topbar-right">
+      <div class="ws-status" :class="wsStatus">
+        <span class="dot"></span>
+        <span v-if="wsStatus === 'connected'">Streamer.bot подключён</span>
+        <span v-else-if="wsStatus === 'connecting'">Подключение…</span>
+        <span v-else>Нет подключения</span>
+      </div>
+      <button class="btn" v-if="phase === 'idle'" :disabled="!canPlay" @click="startGame">▶ Старт</button>
+      <template v-else>
+        <button class="btn" :class="{ 'btn-ghost': !paused }" @click="togglePause">{{ paused ? '▶ Продолжить' : '❚❚ Пауза' }}</button>
+        <button class="btn btn-ghost" @click="resetGame">⟲ Сброс игры</button>
+      </template>
+      <button class="btn btn-ghost" @click="showSettings = true">⚙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- Памятка чату — отдельная крайняя левая колонка -->
+    <section class="side side-howto">
+      <div class="panel howto">
+        <span class="panel-title">Как играть — памятка чату</span>
+        <p class="howto-text">
+          Пиши команду в чат — побеждает самый частый вариант.
+          Один зритель — один голос, новая команда заменяет старую.
+          Сейчас раунд длится <b>{{ voteDuration }} с</b>.
+        </p>
+        <div class="howto-row" v-for="a in actionList" :key="'ht-' + a" :class="'act-' + a">
+          <span class="vote-icon">{{ actionMeta[a].icon }}</span>
+          <span class="howto-label">{{ actionMeta[a].label }}</span>
+          <span class="chips">
+            <code v-for="al in shortAliases(a)" :key="al">{{ al }}</code>
+          </span>
+        </div>
+        <p class="hint" v-if="anyRewards">
+          Награды за баллы канала тоже считаются — их голос весит ×{{ settings.rewardWeight }}.
+        </p>
+      </div>
+    </section>
+
+    <!-- Колонка панелей -->
+    <section class="side">
+
+      <div class="panel stats">
+        <div class="stat"><span class="stat-label">Счёт</span><span class="stat-value">{{ score }}</span></div>
+        <div class="stat"><span class="stat-label">Уровень</span><span class="stat-value">{{ level }}</span></div>
+        <div class="stat"><span class="stat-label">Линии</span><span class="stat-value">{{ lines }}</span></div>
+        <div class="next">
+          <span class="stat-label">Далее</span>
+          <canvas ref="nextPiece" width="112" height="112"></canvas>
+        </div>
+      </div>
+
+      <div class="panel vote-panel">
+        <div class="vote-header">
+          <span class="panel-title">Голосование чата</span>
+          <span class="vote-timer" v-if="phase === 'voting'">{{ fmtTime(timeLeft) }}с</span>
+          <span class="vote-timer idle" v-else>—</span>
+        </div>
+
+        <div class="vote-progress" v-if="phase === 'voting'">
+          <div class="vote-progress-fill" :style="{ width: (timeLeft / voteDuration * 100) + '%' }"></div>
+        </div>
+
+        <div class="vote-rows">
+          <div class="vote-row" v-for="a in actionList" :key="a" :class="'act-' + a">
+            <span class="vote-icon">{{ actionMeta[a].icon }}</span>
+            <div class="vote-mid">
+              <div class="vote-label-line">
+                <span class="vote-label">{{ actionMeta[a].label }}</span>
+                <span class="vote-alias">{{ firstAlias(a) }}</span>
+              </div>
+              <div class="vote-bar"><div class="vote-bar-fill" :style="{ width: barWidth(a) + '%' }"></div></div>
+            </div>
+            <span class="vote-count">{{ tally[a] }}</span>
+          </div>
+        </div>
+
+        <div class="vote-footer">
+          <span v-if="lastAction">Применено: <b class="applied">{{ actionMeta[lastAction].label }}</b> ({{ lastVoters }} гол.)</span>
+          <span v-else-if="phase === 'voting'">Пишите команды в чат!</span>
+          <span v-else>Голосование не идёт</span>
+        </div>
+      </div>
+
+
+      <p class="test-hint" v-if="settings.testMode">
+        ТЕСТ-РЕЖИМ: стрелки ← → ↑ и пробел голосуют с клавиатуры
+      </p>
+    </section>
+
+    <!-- Игровое поле -->
+    <section class="board-wrap">
+      <canvas ref="board" width="280" height="560"></canvas>
+
+      <div class="board-overlay" v-if="phase === 'idle'">
+        <p class="ov-title">ГОТОВ К ИГРЕ</p>
+        <p class="ov-sub" v-if="!canPlay">Подключите Streamer.bot,<br>чтобы начать</p>
+        <p class="ov-sub" v-else>Нажмите «Старт» —<br>дальше играет чат</p>
+      </div>
+
+      <div class="board-overlay" v-else-if="paused">
+        <p class="ov-title ov-yellow">ПАУЗА</p>
+        <p class="ov-sub">Голосование остановлено</p>
+      </div>
+
+      <div class="board-overlay" v-else-if="phase === 'gameover'">
+        <p class="ov-title ov-red">GAME OVER</p>
+        <p class="ov-sub">Счёт: {{ score }}</p>
+        <p class="ov-restart">Рестарт через {{ Math.ceil(restartLeft) }} с</p>
+      </div>
+    </section>
+
+
+    <!-- Колонка активности чата (справа) -->
+    <section class="side side-activity">
+      <div class="panel feed-panel">
+        <span class="panel-title">Последние голоса</span>
+        <transition-group v-if="feed.length" name="feed" tag="ul" class="feed">
+          <li v-for="f in feed" :key="f.id">
+            <b>{{ f.userName }}</b> → {{ actionMeta[f.action].label }}
+          </li>
+        </transition-group>
+        <p class="empty" v-else>Пока пусто — ждём чат</p>
+      </div>
+
+      <div class="panel history-panel">
+        <span class="panel-title">История ходов</span>
+        <transition-group v-if="history.length" name="feed" tag="ul" class="feed history">
+          <li v-for="h in history" :key="h.id" :class="'act-' + h.action">
+            <span class="h-icon">{{ actionMeta[h.action].icon }}</span>
+            <b>{{ actionMeta[h.action].label }}</b>
+            <span class="h-count">{{ h.count }} гол.</span>
+          </li>
+        </transition-group>
+        <p class="empty" v-else>Фигура ещё не получала команд</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Настройки: полноэкранный режим -->
+  <div class="modal-backdrop" v-if="showSettings">
+    <div class="modal">
+
+      <div class="modal-head">
+        <h2>Настройки</h2>
+        <button class="btn btn-ghost" @click="showSettings = false" aria-label="Закрыть">✕</button>
+      </div>
+
+      <div class="modal-grid">
+
+        <section class="modal-col">
+          <h3>Подключение и время</h3>
+          <label class="field">
+            <span>WebSocket Streamer.bot</span>
+            <input v-model="settings.wsUrl" placeholder="ws://127.0.0.1:8080/" />
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>Голосование, с (1 ур.)</span>
+              <input type="number" min="5" v-model.number="settings.baseVoteTime" />
+            </label>
+            <label class="field">
+              <span>Минимум, с</span>
+              <input type="number" min="1" v-model.number="settings.minVoteTime" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Линий на уровень</span>
+              <input type="number" min="1" v-model.number="settings.linesPerLevel" />
+            </label>
+            <label class="field">
+              <span>Ускорение за уровень, с</span>
+              <input type="number" min="0" step="0.5" v-model.number="settings.voteTimeStep" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Рестарт после конца, с</span>
+            <input type="number" min="5" v-model.number="settings.restartDelay" />
+          </label>
+          <p class="hint">
+            Как растёт уровень: каждые N собранных линий уровень увеличивается на 1.
+            Каждый новый уровень сокращает время голосования на указанное число секунд,
+            но не ниже минимума — игра ускоряется по мере успеха чата.
+          </p>
+          <label class="field checkbox">
+            <input type="checkbox" v-model="settings.testMode" />
+            <span>Тест-режим (клавиатура, старт без подключения)</span>
+          </label>
+        </section>
+
+        <section class="modal-col">
+          <h3>Команды чата</h3>
+          <p class="hint">Варианты написания через запятую. Первый показывается в панели голосования.</p>
+          <label class="field" v-for="a in actionList" :key="'al-' + a">
+            <span>{{ actionMeta[a].icon }} {{ actionMeta[a].label }}</span>
+            <input v-model="settings.aliases[a]" />
+          </label>
+        </section>
+
+        <section class="modal-col">
+          <h3>Награды за баллы канала</h3>
+          <p class="hint">Укажите точное название награды из Twitch. Пусто — награда не используется.</p>
+          <label class="field" v-for="a in actionList" :key="'rw-' + a">
+            <span>{{ actionMeta[a].icon }} {{ actionMeta[a].label }}</span>
+            <input v-model="settings.rewards[a]" placeholder="Название награды" />
+          </label>
+          <label class="field">
+            <span>Вес голоса через награду</span>
+            <input type="number" min="1" v-model.number="settings.rewardWeight" />
+          </label>
+        </section>
+
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-ghost" @click="showSettings = false">Отмена</button>
+        <button class="btn" @click="saveSettings">Сохранить</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="js/tetris.js"></script>
+<script src="js/streamerbot.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

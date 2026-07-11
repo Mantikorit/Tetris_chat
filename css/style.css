@@ -1,0 +1,505 @@
+/* ================================================================
+   Chat Tetris — стили
+   ================================================================
+
+   СОДЕРЖАНИЕ ФАЙЛА:
+   1. Настройка внешнего вида (переменные — правь здесь)
+   2. Базовые стили страницы
+   3. Шапка (логотип, статус, кнопки)
+   4. Раскладка колонок (всё в один экран)
+   5. Панели-блоки (общий вид)
+   6. Игровое поле и оверлеи
+   7. Блок статистики
+   8. Панель голосования
+   9. Лента голосов и история ходов
+   10. Памятка чату (крайняя левая колонка)
+   11. Полноэкранные настройки
+   12. Адаптив и доступность
+   ================================================================ */
+
+
+/* ================================================================
+   1. НАСТРОЙКА ВНЕШНЕГО ВИДА
+   Меняй значения здесь — они применятся ко всему сайту.
+   ================================================================ */
+:root {
+
+  /* ---- Палитра страницы ---- */
+  --bg: #0B0E1A;          /* фон всей страницы */
+  --text: #DCE3F7;        /* основной цвет текста */
+  --dim: #7A8ABE;         /* вторичный (приглушённый) текст */
+  --cyan: #4DD9E8;        /* главный акцент: кнопки, таймер, чипы команд */
+  --yellow: #FFD34D;      /* второй акцент: очки, пауза, подсветки */
+  --red: #E8544D;         /* ошибки, game over, нет подключения */
+  --green: #5FE86B;       /* успешное подключение */
+
+  /* ---- Оформление блоков-панелей ----
+     Эти переменные управляют видом ВСЕХ панелей сразу:
+     статистика, голосование, памятка, лента, история, окно настроек. */
+  --panel-bg: #131A2E;             /* фон панели */
+  --panel-border-color: #26304F;   /* цвет рамки панели */
+  --panel-border-width: 1px;       /* толщина рамки (0 — убрать рамку) */
+  --panel-radius: 10px;            /* скругление углов */
+  --panel-padding: 14px;           /* внутренний отступ панели */
+  --panel-shadow: none;            /* тень, напр.: 0 8px 30px rgba(0,0,0,.45) */
+
+  /* ---- Игровое поле ---- */
+  --board-bg: #0A0D18;             /* фон стакана */
+  --board-grid: rgba(122, 138, 190, 0.10); /* цвет сетки (задаётся и в app.js → draw) */
+
+  /* ---- Шрифты ----
+     Подключаются в <head> index.html. Если меняешь семейство,
+     не забудь обновить ссылку на Google Fonts. */
+  --font-display: 'Press Start 2P', monospace; /* пиксельный: цифры, заголовки */
+  --font-body: 'JetBrains Mono', monospace;    /* основной текст */
+
+  /* ---- Ширина колонок раскладки ---- */
+  --col-howto: 250px;      /* памятка чату (крайняя левая) */
+  --col-panels: 300px;     /* статистика + голосование */
+  --col-activity: 235px;   /* голоса + история (правая) */
+  --layout-gap: 16px;      /* расстояние между колонками */
+
+  /* ---- Цвета действий (иконки, полоски голосования, история) ---- */
+  --c-left: #4D7BE8;
+  --c-right: #E89A4D;
+  --c-rotate: #B14DE8;
+  --c-down: #4DD9E8;
+  --c-drop: #5FE86B;
+}
+
+
+/* ================================================================
+   2. БАЗОВЫЕ СТИЛИ СТРАНИЦЫ
+   Страница жёстко занимает один экран: прокрутки нет,
+   лишнее скроллится ВНУТРИ колонок.
+   ================================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background:
+    radial-gradient(1100px 500px at 50% -10%, rgba(77, 217, 232, 0.07), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow: hidden; /* страница не прокручивается — всё в 1 экран */
+}
+
+/* Корень приложения: шапка сверху, раскладка занимает остаток высоты */
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+
+/* ================================================================
+   3. ШАПКА
+   ================================================================ */
+.topbar {
+  flex: 0 0 auto; /* фиксированная, не растягивается */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: var(--panel-border-width) solid var(--panel-border-color);
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+.logo span { color: var(--cyan); animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+
+/* Индикатор подключения к Streamer.bot */
+.ws-status {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--dim);
+  padding: 6px 12px;
+  border: var(--panel-border-width) solid var(--panel-border-color);
+  border-radius: 6px;
+}
+.ws-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+.ws-status.connected { color: var(--green); }
+.ws-status.connected .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.ws-status.connecting .dot { background: var(--yellow); animation: blink 0.8s steps(2) infinite; }
+
+/* Кнопки */
+.btn {
+  font-family: var(--font-body);
+  font-weight: 700; font-size: 13px;
+  color: #0B0E1A;
+  background: var(--cyan);
+  border: none; border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: transform 0.08s, box-shadow 0.15s;
+}
+.btn:hover:not(:disabled) { box-shadow: 0 0 14px rgba(77, 217, 232, 0.5); transform: translateY(-1px); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--panel-border-color); }
+.btn-ghost:hover { box-shadow: none; border-color: var(--dim); }
+
+
+/* ================================================================
+   4. РАСКЛАДКА КОЛОНОК
+   Порядок слева направо:
+   памятка → панели (статы+голосование) → поле → активность чата.
+   Каждая колонка ограничена высотой экрана и скроллится внутри.
+   ================================================================ */
+.layout {
+  flex: 1 1 auto;
+  min-height: 0; /* обязательно: разрешает детям сжиматься по высоте */
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: var(--layout-gap);
+  padding: 14px 20px;
+  overflow: hidden;
+}
+
+/* Общая колонка боковых панелей */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;      /* запас: если панели не влезли — скролл внутри колонки */
+  width: var(--col-panels);
+  flex: 0 0 auto;
+  scrollbar-width: thin;
+}
+.side-howto    { width: var(--col-howto); }
+.side-activity { width: var(--col-activity); }
+
+
+/* ================================================================
+   5. ПАНЕЛИ-БЛОКИ (общий вид — настраивается в разделе 1)
+   ================================================================ */
+.panel {
+  background: var(--panel-bg);
+  border: var(--panel-border-width) solid var(--panel-border-color);
+  border-radius: var(--panel-radius);
+  padding: var(--panel-padding);
+  box-shadow: var(--panel-shadow);
+  flex: 0 0 auto;
+}
+
+.panel-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--dim);
+}
+
+
+/* ================================================================
+   6. ИГРОВОЕ ПОЛЕ И ОВЕРЛЕИ
+   Канвас рисуется в 280×560, но масштабируется по высоте экрана,
+   чтобы стакан всегда помещался целиком.
+   ================================================================ */
+.board-wrap {
+  position: relative;
+  background: var(--panel-bg);
+  border: var(--panel-border-width) solid var(--panel-border-color);
+  border-radius: var(--panel-radius);
+  padding: 10px;
+  align-self: flex-start;
+  flex: 0 0 auto;
+}
+
+.board-wrap canvas {
+  display: block;
+  background: var(--board-bg);
+  border-radius: 4px;
+  /* масштаб под высоту экрана: шапка + отступы ≈ 130px */
+  height: min(560px, calc(100vh - 130px));
+  width: auto; /* ширина следует за высотой, пропорции сохраняются */
+}
+
+/* Оверлей поверх стакана: старт / пауза / game over */
+.board-overlay {
+  position: absolute; inset: 10px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px;
+  background: rgba(10, 13, 24, 0.88);
+  border-radius: 4px;
+  text-align: center;
+}
+.ov-title {
+  font-family: var(--font-display);
+  font-size: 16px; color: var(--cyan);
+  text-shadow: 0 0 18px rgba(77, 217, 232, 0.6);
+  line-height: 1.6;
+}
+.ov-red    { color: var(--red);    text-shadow: 0 0 18px rgba(232, 84, 77, 0.6); }
+.ov-yellow { color: var(--yellow); text-shadow: 0 0 18px rgba(255, 211, 77, 0.5); }
+.ov-sub { color: var(--dim); font-size: 13px; line-height: 1.6; }
+.ov-restart { font-family: var(--font-display); font-size: 10px; color: var(--yellow); }
+
+
+/* ================================================================
+   7. БЛОК СТАТИСТИКИ (счёт, уровень, линии, следующая фигура)
+   ================================================================ */
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  align-items: start;
+}
+.stat { display: flex; flex-direction: column; gap: 5px; }
+.stat-label {
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 2px; color: var(--dim);
+}
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 16px; color: var(--yellow);
+}
+/* Превью следующей фигуры занимает правый столбец сетки */
+.next { grid-row: 1 / span 3; grid-column: 2; display: flex; flex-direction: column; gap: 5px; }
+.next canvas {
+  background: var(--board-bg);
+  border: var(--panel-border-width) solid var(--panel-border-color);
+  border-radius: 4px;
+  width: 96px; height: 96px; /* чуть компактнее, рисуется в 112×112 */
+}
+
+
+/* ================================================================
+   8. ПАНЕЛЬ ГОЛОСОВАНИЯ
+   ================================================================ */
+.vote-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.vote-timer { font-family: var(--font-display); font-size: 13px; color: var(--cyan); }
+.vote-timer.idle { color: var(--dim); }
+
+/* Полоса оставшегося времени раунда */
+.vote-progress { height: 5px; border-radius: 3px; background: var(--panel-border-color); overflow: hidden; margin-bottom: 10px; }
+.vote-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--yellow));
+  transition: width 0.1s linear;
+}
+
+.vote-rows { display: flex; flex-direction: column; gap: 8px; }
+.vote-row { display: flex; align-items: center; gap: 8px; }
+
+/* Квадратная иконка действия; цвет — по классу act-* родителя */
+.vote-icon {
+  width: 30px; height: 30px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 6px; font-size: 14px;
+  background: var(--panel-border-color);
+}
+.act-left   .vote-icon { color: var(--c-left); }
+.act-right  .vote-icon { color: var(--c-right); }
+.act-rotate .vote-icon { color: var(--c-rotate); }
+.act-down   .vote-icon { color: var(--c-down); }
+.act-drop   .vote-icon { color: var(--c-drop); }
+
+.vote-mid { flex: 1; min-width: 0; }
+.vote-label-line { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.vote-label { font-size: 12px; font-weight: 600; }
+.vote-alias { font-size: 10px; color: var(--dim); }
+
+/* Полоска доли голосов за действие */
+.vote-bar { height: 7px; border-radius: 4px; background: rgba(38, 48, 79, 0.6); overflow: hidden; }
+.vote-bar-fill { height: 100%; border-radius: 4px; transition: width 0.25s; }
+.act-left   .vote-bar-fill { background: var(--c-left); }
+.act-right  .vote-bar-fill { background: var(--c-right); }
+.act-rotate .vote-bar-fill { background: var(--c-rotate); }
+.act-down   .vote-bar-fill { background: var(--c-down); }
+.act-drop   .vote-bar-fill { background: var(--c-drop); }
+
+.vote-count { font-family: var(--font-display); font-size: 11px; width: 30px; text-align: right; }
+
+.vote-footer {
+  margin-top: 10px; padding-top: 9px;
+  border-top: 1px dashed var(--panel-border-color);
+  font-size: 11px; color: var(--dim);
+}
+.applied { color: var(--yellow); }
+
+/* Плашка тест-режима */
+.test-hint {
+  font-size: 11px; color: var(--yellow);
+  border: 1px dashed var(--yellow); border-radius: 6px;
+  padding: 8px 10px;
+  flex: 0 0 auto;
+}
+
+
+/* ================================================================
+   9. ЛЕНТА ГОЛОСОВ И ИСТОРИЯ ХОДОВ (правая колонка)
+   Обе панели делят высоту колонки пополам,
+   длинные списки прокручиваются внутри себя.
+   ================================================================ */
+.feed-panel, .history-panel {
+  flex: 1 1 50%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.feed {
+  list-style: none;
+  margin-top: 8px;
+  display: flex; flex-direction: column; gap: 5px;
+  overflow-y: auto;   /* прокрутка внутри панели, не страницы */
+  min-height: 0;
+  scrollbar-width: thin;
+}
+.feed li { font-size: 12px; color: var(--dim); }
+.feed li b { color: var(--text); }
+.feed-enter-active { transition: all 0.25s; }
+.feed-enter-from { opacity: 0; transform: translateX(-8px); }
+
+.empty { margin-top: 8px; font-size: 12px; color: var(--dim); font-style: italic; }
+
+/* Строка истории: иконка, действие, число голосов */
+.feed.history li { display: flex; align-items: center; gap: 8px; }
+.h-icon {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 4px; font-size: 12px;
+  background: var(--panel-border-color);
+}
+.act-left   .h-icon { color: var(--c-left); }
+.act-right  .h-icon { color: var(--c-right); }
+.act-rotate .h-icon { color: var(--c-rotate); }
+.act-down   .h-icon { color: var(--c-down); }
+.act-drop   .h-icon { color: var(--c-drop); }
+.h-count { margin-left: auto; color: var(--dim); font-size: 11px; }
+
+
+/* ================================================================
+   10. ПАМЯТКА ЧАТУ (крайняя левая колонка)
+   ================================================================ */
+.howto-text { margin-top: 8px; font-size: 11px; color: var(--dim); line-height: 1.55; }
+.howto-text b { color: var(--yellow); }
+
+.howto-row { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; }
+.howto-row .vote-icon { width: 26px; height: 26px; font-size: 12px; }
+.howto-label { font-size: 12px; font-weight: 600; width: 56px; flex-shrink: 0; padding-top: 5px; }
+
+/* Чипы с вариантами команд */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips code {
+  font-family: var(--font-body);
+  font-size: 10px; color: var(--cyan);
+  background: rgba(77, 217, 232, 0.08);
+  border: 1px solid rgba(77, 217, 232, 0.25);
+  border-radius: 4px; padding: 2px 5px;
+}
+.howto .hint { margin-top: 10px; }
+
+
+/* ================================================================
+   11. НАСТРОЙКИ — НА ВЕСЬ ЭКРАН
+   Окно занимает весь вьюпорт; поля разложены в три колонки,
+   при нехватке высоты прокручивается только средняя часть.
+   ================================================================ */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(5, 7, 14, 0.85);
+  z-index: 10;
+}
+
+.modal {
+  position: absolute; inset: 0;   /* на весь экран */
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 28px;
+  gap: 14px;
+}
+
+.modal-head { display: flex; justify-content: space-between; align-items: center; flex: 0 0 auto; }
+.modal-head h2 { font-family: var(--font-display); font-size: 14px; }
+
+/* Три колонки настроек; на узких экранах перестраиваются сами */
+.modal-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  align-content: start;
+  scrollbar-width: thin;
+}
+
+.modal-col { display: flex; flex-direction: column; gap: 11px; min-width: 0; }
+.modal-col h3 {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 2px; color: var(--dim);
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--panel-border-color);
+}
+
+/* Поле ввода с подписью */
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; min-width: 0; }
+.field span { color: var(--dim); }
+.field input[type="text"], .field input:not([type]), .field input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--panel-border-color);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 11px;
+}
+.field input:focus { outline: none; border-color: var(--cyan); }
+
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+
+.field.checkbox { flex-direction: row; align-items: center; gap: 10px; }
+.field.checkbox span { color: var(--text); }
+
+.hint { font-size: 11px; color: var(--dim); line-height: 1.5; }
+
+.modal-actions {
+  flex: 0 0 auto;
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding-top: 12px;
+  border-top: var(--panel-border-width) solid var(--panel-border-color);
+}
+
+
+/* ================================================================
+   12. АДАПТИВ И ДОСТУПНОСТЬ
+   Ниже 1100px колонки складываются в столбик — тут один экран
+   физически невозможен, поэтому включается обычная прокрутка.
+   ================================================================ */
+@media (max-width: 1100px) {
+  body { overflow: auto; }
+  #app { height: auto; }
+  .layout {
+    flex-direction: column;
+    align-items: center;
+    overflow: visible;
+  }
+  .side, .side-howto, .side-activity { width: min(340px, 100%); max-height: none; overflow: visible; }
+  .board-wrap { order: 1; }
+  .side:not(.side-howto):not(.side-activity) { order: 2; }
+  .side-activity { order: 3; }
+  .side-howto { order: 4; }
+  .field-row { flex-direction: column; }
+}
+
+/* Уважение к настройке «меньше движения» в ОС */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
